@@ -284,7 +284,7 @@ function FolderListing({
         aria-label={`Contents of ${folder.name}`}
         tabIndex={0}
         aria-busy={query.isFetching || undefined}
-        className="max-h-[45vh] min-h-32 overflow-auto rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="max-h-[45dvh] min-h-32 touch-pan-x touch-pan-y overflow-auto overscroll-contain rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {body}
       </div>
