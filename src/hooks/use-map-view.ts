@@ -132,9 +132,10 @@ export function useMapView(bounds: MapBounds, zoomMin: number, zoomMax: number) 
     boundsRef.current = bounds;
   }, [bounds]);
 
-  const applyView = useCallback((update: (previous: MapView) => MapView) => {
+  const applyView = useCallback((update: (previous: MapView) => MapView, unbounded = false) => {
     setViewState((previous) => {
-      const next = clampView(update(previous), sizeRef.current, boundsRef.current);
+      const updated = update(previous);
+      const next = unbounded ? updated : clampView(updated, sizeRef.current, boundsRef.current);
       viewRef.current = next;
       return next;
     });
@@ -154,6 +155,13 @@ export function useMapView(bounds: MapBounds, zoomMin: number, zoomMax: number) 
     },
     [applyView, stopGlide],
   );
+
+  const panForDrag = useCallback((dx: number, dy: number) => {
+    stopGlide();
+    applyView((previous) => ({ ...previous, x: previous.x + dx, y: previous.y + dy }), true);
+  }, [applyView, stopGlide]);
+
+  const constrain = useCallback(() => setView((previous) => previous), [setView]);
 
   /**
    * Ease the view towards `update(view)` — where an eased move is already heading, if one is under way.
@@ -407,6 +415,8 @@ export function useMapView(bounds: MapBounds, zoomMin: number, zoomMax: number) 
     fit,
     requestFit,
     reveal,
+    panForDrag,
+    constrain,
     wasPan,
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onKeyDown },
   };

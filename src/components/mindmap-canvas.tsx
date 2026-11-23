@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactElement } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactElement, type RefObject } from "react";
 import {
   DndContext,
   MouseSensor,
@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
   type Announcements,
+  type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
@@ -17,6 +18,9 @@ import {
 import { motion, type Transition } from "motion/react";
 import { useAppStore } from "@/lib/store";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Spline, Star, Tag, type LucideIcon } from "lucide-react";
+import { centeredDecoration, DECOR_GLYPH, decorScaleFor, LINK_HANDLE_SIZE } from "@/lib/node-decorations";
+import { dragDisplacement, edgePanVelocity } from "@/lib/drag-edge-pan";
+import type { MapView } from "@/hooks/use-map-view";
 import { NodeActionBar, type LinkActions, type NodeActions } from "@/components/node-action-bar";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import type { ActionBarSide } from "@/lib/action-bar-placement";
@@ -73,25 +77,6 @@ const linkSource = (id: UniqueIdentifier | undefined): string | null => {
   const text = id === undefined ? "" : String(id);
   return text.startsWith(LINK_HANDLE_PREFIX) ? text.slice(LINK_HANDLE_PREFIX.length) : null;
 };
-/** Diameter of the link handle on the selected node, in map pixels. */
-const LINK_HANDLE_SIZE = 22;
-/** Node decorations (expand/collapse toggle, link handle) never shrink below this many screen pixels… */
-const DECOR_MIN_PX = 16;
-/** …and are hidden altogether when the map is zoomed out further than this, where nodes are too small to work on. */
-const DECOR_HIDE_ZOOM = 0.35;
-/** Their glyphs never grow past the selected node's toolbar icons (16 screen pixels; the decoration glyph is 14 map pixels). */
-const DECOR_GLYPH = 14;
-const TOOLBAR_ICON_PX = 16;
-/**
- * How much to scale a decoration (in map pixels) so it stays between its minimum size and the toolbar's icon size on
- * screen, or null to hide it. Rounded so a zoom gesture re-renders the nodes only in small steps.
- */
-function decorScaleFor(zoom: number): number | null {
-  if (zoom < DECOR_HIDE_ZOOM) return null;
-  const grow = Math.ceil((DECOR_MIN_PX / (LINK_HANDLE_SIZE * zoom)) * 20) / 20;
-  const shrink = Math.floor((TOOLBAR_ICON_PX / (DECOR_GLYPH * zoom)) * 20) / 20;
-  return Math.max(grow, Math.min(1, shrink));
-}
 const NO_ROUTES: RoutedLink[] = [];
 /** Opacity of a link no selected or hovered node touches — present, not distracting. */
 const FAINT_LINK = 0.3;
@@ -105,6 +90,9 @@ interface MindMapCanvasProps {
   layout: MindMapLayout;
   selectedId: string | null;
   zoom: number;
+  view: MapView;
+  viewportRef: RefObject<HTMLDivElement | null>;
+  onPanForDrag: (dx: number, dy: number) => void;
   /** Changes as the map pans or zooms; the action bar re-places itself on it. */
   viewKey?: string;
   captionId: string;
@@ -159,6 +147,8 @@ interface LiveDrag {
   dy: number;
   hx: number;
   hy: number;
+  startPoint: { x: number; y: number };
+  startView: MapView;
 }
 
 /** How strongly a link is drawn: picked, touching the selected or hovered node, or merely present. */
@@ -311,6 +301,9 @@ export function MindMapCanvas({
   layout,
   selectedId,
   zoom,
+  view,
+  viewportRef,
+  onPanForDrag,
   viewKey,
   captionId,
   onSelect,
@@ -363,6 +356,8 @@ export function MindMapCanvas({
   const edgeElement = useElementCache<MindMapEdgeProps>();
   const linkElement = useElementCache<MindMapLinkProps>();
   const lastDelta = useRef({ x: 0, y: 0 });
+  const startClient = useRef<{ x: number; y: number } | null>(null);
+  const collisionArgs = useRef<Parameters<CollisionDetection>[0] | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   /** Tab was pressed on the selected node while its bar was hidden: focus the bar as soon as it is shown. */
@@ -371,7 +366,11 @@ export function MindMapCanvas({
 
   const descendants = useMemo(() => countAllDescendants(map), [map]);
   // While a branch is dragged it follows the pointer live; the rest of the map holds still until the drop.
-  const liveLayout = useMemo(() => (drag?.kind === "move" ? shiftBranch(map, layout, drag.id, drag.dx, drag.dy) : layout), [drag, layout, map]);
+  const displacement = useMemo(() => drag ? dragDisplacement(drag.startPoint, { x: drag.dx, y: drag.dy }, drag.startView, view) : null, [drag, view]);
+  const liveLayout = useMemo(
+    () => (drag?.kind === "move" && displacement ? shiftBranch(map, layout, drag.id, displacement.x, displacement.y) : layout),
+    [drag, displacement, layout, map],
+  );
   const inDrag = (id: string) => drag?.kind === "move" && (id === drag.id || isDescendant(map, drag.id, id));
   // SVG paints in document order, so the dragged branch is rendered last to stay on top.
   const orderedNodes = drag?.kind === "move" ? [...liveLayout.nodes.filter((p) => !inDrag(p.id)), ...liveLayout.nodes.filter((p) => inDrag(p.id))] : liveLayout.nodes;
@@ -515,59 +514,113 @@ export function MindMapCanvas({
   const barShown = toolbarOpen && drag === null && selectedLinkId === null;
   // The link handle sits on a free corner of the selected node; it steps aside with the bar during a drag.
   const handleAt =
-    selectedPlaced && selectedNode && showLinks && drag === null
-      ? handleCentre(
-          selectedPlaced,
-          handleCorner(selectedPlaced, selectedPlaced.id === map.rootId, selectedPlaced.id !== map.rootId && selectedNode.children.length > 0, barShown ? toolbarSide : null),
-        )
+    selectedPlaced && selectedNode && showLinks && drag?.kind !== "move"
+      ? drag?.kind === "link"
+        ? { x: drag.hx, y: drag.hy }
+        : handleCentre(
+            selectedPlaced,
+            handleCorner(selectedPlaced, selectedPlaced.id === map.rootId, selectedPlaced.id !== map.rootId && selectedNode.children.length > 0, barShown ? toolbarSide : null),
+          )
       : null;
   const handleRef = useRef(handleAt);
   useLayoutEffect(() => {
     handleRef.current = handleAt;
   });
 
-  const handleDragStart = ({ active }: DragStartEvent) => {
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    collisionArgs.current = args;
+    const pointer = args.pointerCoordinates;
+    const viewport = viewportRef.current?.getBoundingClientRect();
+    if (!pointer || !viewport || pointer.x < viewport.left || pointer.x > viewport.right || pointer.y < viewport.top || pointer.y > viewport.bottom) return [];
+    const rects = new Map(args.droppableRects);
+    for (const container of args.droppableContainers) {
+      const rect = container.node.current?.getBoundingClientRect();
+      if (rect) rects.set(container.id, rect);
+    }
+    return pointerWithin({ ...args, droppableRects: rects });
+  }, [viewportRef]);
+
+  const dragActive = drag !== null;
+  useEffect(() => {
+    if (!dragActive) return;
+    let frame = 0;
+    let previous: number | null = null;
+    const step = (now: number) => {
+      const viewport = viewportRef.current?.getBoundingClientRect();
+      const start = startClient.current;
+      if (viewport && start && previous !== null) {
+        const velocity = edgePanVelocity({ x: start.x + lastDelta.current.x, y: start.y + lastDelta.current.y }, viewport);
+        const seconds = Math.min(now - previous, 40) / 1000;
+        if (velocity.x || velocity.y) onPanForDrag(velocity.x * seconds, velocity.y * seconds);
+      }
+      previous = now;
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [dragActive, onPanForDrag, viewportRef]);
+
+  const handleDragStart = ({ active, activatorEvent }: DragStartEvent) => {
     lastDelta.current = { x: 0, y: 0 };
+    const pointer = activatorEvent instanceof MouseEvent
+      ? activatorEvent
+      : typeof TouchEvent !== "undefined" && activatorEvent instanceof TouchEvent
+        ? activatorEvent.touches[0] ?? activatorEvent.changedTouches[0]
+        : null;
+    const viewport = viewportRef.current?.getBoundingClientRect();
+    startClient.current = pointer ? { x: pointer.clientX, y: pointer.clientY } : null;
+    const startPoint = pointer && viewport ? { x: pointer.clientX - viewport.left, y: pointer.clientY - viewport.top } : { x: 0, y: 0 };
     const from = linkSource(active.id);
     const handle = handleRef.current;
-    if (from !== null) setDrag({ kind: "link", id: from, dx: 0, dy: 0, hx: handle?.x ?? 0, hy: handle?.y ?? 0 });
-    else setDrag({ kind: "move", id: String(active.id), dx: 0, dy: 0, hx: 0, hy: 0 });
+    if (from !== null) setDrag({ kind: "link", id: from, dx: 0, dy: 0, hx: handle?.x ?? 0, hy: handle?.y ?? 0, startPoint, startView: view });
+    else setDrag({ kind: "move", id: String(active.id), dx: 0, dy: 0, hx: 0, hy: 0, startPoint, startView: view });
     onDragChange?.(true);
   };
   const handleDragMove = ({ delta }: DragMoveEvent) => {
     lastDelta.current = delta;
-    setDrag((current) => (current ? { ...current, dx: delta.x / zoom, dy: delta.y / zoom } : current));
+    setDrag((current) => (current ? { ...current, dx: delta.x, dy: delta.y } : current));
   };
   const handleDragCancel = () => {
+    startClient.current = null;
+    collisionArgs.current = null;
     setDrag(null);
     onDragChange?.(false);
   };
   const handleDragEnd = ({ active, over, delta }: DragEndEvent) => {
+    const start = startClient.current;
+    const args = collisionArgs.current;
+    const moved = drag ? dragDisplacement(drag.startPoint, delta, drag.startView, view) : null;
+    const target = start && args
+      ? collisionDetection({ ...args, pointerCoordinates: { x: start.x + delta.x, y: start.y + delta.y } })[0]?.id
+      : over?.id;
+    startClient.current = null;
+    collisionArgs.current = null;
     setDrag(null);
     onDragChange?.(false);
-    lastDelta.current = delta;
+    lastDelta.current = moved ? { x: moved.x * zoom, y: moved.y * zoom } : delta;
     const from = linkSource(active.id);
     if (from !== null) {
-      if (over && canLink(map, from, String(over.id))) onLink(from, String(over.id));
+      if (target !== undefined && canLink(map, from, String(target))) onLink(from, String(target));
       return;
     }
     const id = String(active.id);
-    if (over && canMoveUnder(map, id, String(over.id))) {
-      onMove(id, String(over.id));
+    if (target !== undefined && canMoveUnder(map, id, String(target))) {
+      onMove(id, String(target));
       return;
     }
-    if (Math.hypot(delta.x, delta.y) < MIN_MOVE) return;
+    if (!moved) return;
+    if (Math.hypot(moved.x * zoom, moved.y * zoom) < MIN_MOVE) return;
     const placed = layout.nodes.find((p) => p.id === id);
     const parentId = map.nodes[id]?.parentId;
     const parent = parentId ? layout.nodes.find((p) => p.id === parentId) : undefined;
     if (!placed || !parent) return;
-    onPlace(id, { x: placed.x + delta.x / zoom - parent.x, y: placed.y + delta.y / zoom - parent.y });
+    onPlace(id, { x: placed.x + moved.x - parent.x, y: placed.y + moved.y - parent.y });
   };
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={collisionDetection}
       autoScroll={false}
       accessibility={{
         announcements,
@@ -617,13 +670,13 @@ export function MindMapCanvas({
           {drag?.kind === "link" && (
             <g className="pointer-events-none text-primary forced-colors:text-[Highlight]">
               <path
-                d={`M ${drag.hx} ${drag.hy} L ${drag.hx + drag.dx} ${drag.hy + drag.dy}`}
+                d={`M ${drag.hx} ${drag.hy} L ${drag.hx + (displacement?.x ?? 0)} ${drag.hy + (displacement?.y ?? 0)}`}
                 className="fill-none stroke-current"
                 strokeWidth={2.5}
                 strokeLinecap="round"
                 strokeDasharray="0.5 6"
               />
-              <circle cx={drag.hx + drag.dx} cy={drag.hy + drag.dy} r={5} className="fill-current" />
+              <circle cx={drag.hx + (displacement?.x ?? 0)} cy={drag.hy + (displacement?.y ?? 0)} r={5} className="fill-current" />
             </g>
           )}
         </g>
@@ -937,22 +990,22 @@ const MindMapNode = memo(function MindMapNode({
           </span>
         </foreignObject>
       )}
-      {showToggle && (
-        <foreignObject x={toggleX} y={toggleY} width={toggleWidth} height={22} className="overflow-visible">
+      {showToggle && decorScale !== null && (
+        <foreignObject {...centeredDecoration(toggleX, toggleY, toggleWidth, LINK_HANDLE_SIZE, decorScale)} className="overflow-visible">
           <button
             type="button"
             inert={leaving}
             onClick={() => onToggle(node.id)}
             aria-expanded={!node.collapsed}
             aria-label={`${node.collapsed ? "Expand" : "Collapse"} branch: ${node.label}`}
-            style={decorScale && decorScale !== 1 ? { scale: decorScale } : undefined}
+            style={{ width: toggleWidth * decorScale, height: LINK_HANDLE_SIZE * decorScale, borderWidth: decorScale, fontSize: 11 * decorScale, paddingInline: 4 * decorScale }}
             className={cn(
-              "flex h-[22px] w-full items-center justify-center rounded-full border border-border bg-card px-1 text-[11px] font-semibold tabular-nums text-foreground shadow-sm transition-[color,background-color,opacity] hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex items-center justify-center rounded-full border border-border bg-card font-semibold tabular-nums text-foreground shadow-sm transition-[color,background-color,opacity] hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               // The toggle fades with its node, and comes back with it under the pointer or focus.
               match === false && FADED,
             )}
           >
-            {node.collapsed ? `+${descendants}` : <CollapseChevron aria-hidden="true" className="size-3.5" />}
+            {node.collapsed ? `+${descendants}` : <CollapseChevron aria-hidden="true" style={{ width: DECOR_GLYPH * decorScale, height: DECOR_GLYPH * decorScale }} />}
           </button>
         </foreignObject>
       )}
@@ -1058,7 +1111,7 @@ interface LinkHandleProps {
 function LinkHandle({ id, label, x, y, scale, onPick }: LinkHandleProps) {
   const { setNodeRef, listeners, isDragging } = useDraggable({ id: `${LINK_HANDLE_PREFIX}${id}` });
   return (
-    <foreignObject x={x - LINK_HANDLE_SIZE / 2} y={y - LINK_HANDLE_SIZE / 2} width={LINK_HANDLE_SIZE} height={LINK_HANDLE_SIZE} className="overflow-visible">
+    <foreignObject {...centeredDecoration(x - LINK_HANDLE_SIZE / 2, y - LINK_HANDLE_SIZE / 2, LINK_HANDLE_SIZE, LINK_HANDLE_SIZE, scale)} className="overflow-visible">
       <button
         ref={setNodeRef}
         type="button"
@@ -1067,14 +1120,15 @@ function LinkHandle({ id, label, x, y, scale, onPick }: LinkHandleProps) {
         aria-label={`Link ${label} to another node: drag to a node, or click to choose one`}
         title="Link to another node"
         onClick={() => onPick(id)}
-        style={scale !== 1 ? { scale } : undefined}
+        style={{ width: LINK_HANDLE_SIZE * scale, height: LINK_HANDLE_SIZE * scale, borderWidth: scale }}
         {...listeners}
         className={cn(
-          "grid size-[22px] touch-none place-items-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring forced-colors:border-[color:ButtonText]",
+          "grid touch-none place-items-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring forced-colors:border-[color:ButtonText]",
+          isDragging && "pointer-events-none opacity-0",
           isDragging ? "cursor-grabbing bg-primary text-primary-foreground" : "cursor-crosshair",
         )}
       >
-        <Spline aria-hidden="true" className="size-3.5" />
+        <Spline aria-hidden="true" style={{ width: DECOR_GLYPH * scale, height: DECOR_GLYPH * scale }} />
       </button>
     </foreignObject>
   );

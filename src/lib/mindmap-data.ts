@@ -575,7 +575,7 @@ const HELP_ENTRIES: HelpEntry[] = [
     parent: "arrange",
     label: "Drag to pin",
     text: [
-      "Drag a node and drop it on the background: it stays where it landed, relative to its parent, and its branch comes with it. In the inspector's **Position** group the arrow buttons nudge it by `24` px and **Reset position** returns it to the automatic layout. The root cannot be dragged.",
+      "Drag a node and drop it on the background: it stays where it landed, relative to its parent, and its branch comes with it. Hold it near the edge of the canvas to pan farther. In the inspector's **Position** group the arrow buttons nudge it by `24` px and **Reset position** returns it to the automatic layout. The root cannot be dragged.",
     ],
   },
   {
@@ -747,7 +747,7 @@ const HELP_ENTRIES: HelpEntry[] = [
     parent: "links",
     label: "Draw a link",
     text: [
-      "Drag the round handle on the corner of the selected node onto another node, or press **Link to another node…** on its toolbar — **Link to…** in the inspector does the same — and pick the node by name. A node cannot be linked to itself, to its parent or children, or twice to the same node.",
+      "Drag the round handle on the corner of the selected node onto another node; hold it near the canvas edge to pan farther. Or press **Link to another node…** on its toolbar — **Link to…** in the inspector does the same — and pick the node by name. A node cannot be linked to itself, to its parent or children, or twice to the same node.",
     ],
   },
   {

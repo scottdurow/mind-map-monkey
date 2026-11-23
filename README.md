@@ -133,3 +133,9 @@ review them, and make a new GitHub commit.
 - An unsaved draft and your preferences are kept in the browser's `localStorage`, so a refresh doesn't lose them (see KNOWN-ISSUES for what that means on shared computers).
 - `node_modules/` is baked into the orchestrator image and bind-mounted read-only; dependencies are not
   installed or patched per session.
+
+## License
+
+Project-authored code is available under the [MIT License](./LICENSE).
+Some generated and template files carry separate Microsoft copyright notices;
+check their applicable terms before reuse. Dependencies have their own licenses.

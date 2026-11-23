@@ -499,7 +499,12 @@ export function HomePage() {
   const layout = useMindMapLayout(map);
   const layoutRef = useRef(layout);
   const view = useMapView(layout, ZOOM_MIN, ZOOM_MAX);
-  const { reveal, requestFit } = view;
+  const { reveal, requestFit, constrain } = view;
+  const wasDragging = useRef(false);
+  useLayoutEffect(() => {
+    if (wasDragging.current && !dragging) constrain();
+    wasDragging.current = dragging;
+  }, [dragging, layout, constrain]);
   const mermaid = useMemo(() => toMermaid(map), [map]);
   const requestedId = searchParams.get("file")?.trim() || null;
   const requestedPath = searchParams.get("path")?.trim() || null;
@@ -2171,6 +2176,9 @@ export function HomePage() {
                     layout={layout}
                     selectedId={selectedId}
                     zoom={zoom}
+                    view={view.view}
+                    viewportRef={view.viewportRef}
+                    onPanForDrag={view.panForDrag}
                     viewKey={view.transform}
                     captionId="map-caption"
                     onSelect={selectNode}
