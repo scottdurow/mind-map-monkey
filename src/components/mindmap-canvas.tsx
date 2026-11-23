@@ -20,7 +20,7 @@ import { useAppStore } from "@/lib/store";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Spline, Star, Tag, type LucideIcon } from "lucide-react";
 import { centeredDecoration, DECOR_GLYPH, decorScaleFor, LINK_HANDLE_SIZE } from "@/lib/node-decorations";
 import { dragDisplacement, edgePanVelocity } from "@/lib/drag-edge-pan";
-import type { MapView } from "@/hooks/use-map-view";
+import type { MapView, TouchGesture } from "@/hooks/use-map-view";
 import { NodeActionBar, type LinkActions, type NodeActions } from "@/components/node-action-bar";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import type { ActionBarSide } from "@/lib/action-bar-placement";
@@ -93,6 +93,8 @@ interface MindMapCanvasProps {
   view: MapView;
   viewportRef: RefObject<HTMLDivElement | null>;
   onPanForDrag: (dx: number, dy: number) => void;
+  pinching: boolean;
+  touchGesture: RefObject<TouchGesture>;
   /** Changes as the map pans or zooms; the action bar re-places itself on it. */
   viewKey?: string;
   captionId: string;
@@ -304,6 +306,8 @@ export function MindMapCanvas({
   view,
   viewportRef,
   onPanForDrag,
+  pinching,
+  touchGesture,
   viewKey,
   captionId,
   onSelect,
@@ -357,6 +361,8 @@ export function MindMapCanvas({
   const linkElement = useElementCache<MindMapLinkProps>();
   const lastDelta = useRef({ x: 0, y: 0 });
   const startClient = useRef<{ x: number; y: number } | null>(null);
+  const dragPinchGeneration = useRef(0);
+  const cancelTouchDrop = useRef(false);
   const collisionArgs = useRef<Parameters<CollisionDetection>[0] | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
@@ -542,6 +548,13 @@ export function MindMapCanvas({
 
   const dragActive = drag !== null;
   useEffect(() => {
+    if (!pinching || !dragActive) return;
+    cancelTouchDrop.current = true;
+    setDrag(null);
+    onDragChange?.(false);
+  }, [pinching, dragActive, onDragChange]);
+
+  useEffect(() => {
     if (!dragActive) return;
     let frame = 0;
     let previous: number | null = null;
@@ -561,6 +574,9 @@ export function MindMapCanvas({
   }, [dragActive, onPanForDrag, viewportRef]);
 
   const handleDragStart = ({ active, activatorEvent }: DragStartEvent) => {
+    dragPinchGeneration.current = touchGesture.current.pinchGeneration;
+    cancelTouchDrop.current = touchGesture.current.blockDrag;
+    if (cancelTouchDrop.current) return;
     lastDelta.current = { x: 0, y: 0 };
     const pointer = activatorEvent instanceof MouseEvent
       ? activatorEvent
@@ -577,10 +593,12 @@ export function MindMapCanvas({
     onDragChange?.(true);
   };
   const handleDragMove = ({ delta }: DragMoveEvent) => {
+    if (cancelTouchDrop.current || touchGesture.current.pinchGeneration !== dragPinchGeneration.current) return;
     lastDelta.current = delta;
     setDrag((current) => (current ? { ...current, dx: delta.x, dy: delta.y } : current));
   };
   const handleDragCancel = () => {
+    cancelTouchDrop.current = false;
     startClient.current = null;
     collisionArgs.current = null;
     setDrag(null);
@@ -622,6 +640,7 @@ export function MindMapCanvas({
       sensors={sensors}
       collisionDetection={collisionDetection}
       autoScroll={false}
+      cancelDrop={() => cancelTouchDrop.current || touchGesture.current.pinchGeneration !== dragPinchGeneration.current}
       accessibility={{
         announcements,
         screenReaderInstructions: {

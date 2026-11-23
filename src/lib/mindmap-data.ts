@@ -626,7 +626,7 @@ const HELP_ENTRIES: HelpEntry[] = [
     label: "Zoom and fit",
     tags: ["shortcut"],
     text: [
-      "A plain mouse wheel, a trackpad swipe or a pinch zooms around the pointer. The `+` and `−` keys, the buttons at the bottom right of the canvas and `View → Zoom in` / `Zoom out` zoom around the centre, from 20% to 250%. `0` or **Fit to screen** centres the whole map, zoomed out as far as it needs — never past 100%. A map you open or import is fitted on arrival. **Full screen** (beside the zoom buttons, or `View → Full screen`) hides the header and status line to give the map every pixel; `Escape` or the same button leaves it.",
+      "A plain mouse wheel or a trackpad swipe or pinch zooms around the pointer. On a touch screen, pinch anywhere on the canvas, including on nodes, to zoom around your fingers. The `+` and `−` keys, the buttons at the bottom right of the canvas and `View → Zoom in` / `Zoom out` zoom around the centre, from 20% to 250%. `0` or **Fit to screen** centres the whole map, zoomed out as far as it needs — never past 100%. A map you open or import is fitted on arrival. **Full screen** (beside the zoom buttons, or `View → Full screen`) hides the header and status line to give the map every pixel; `Escape` or the same button leaves it.",
     ],
   },
   {

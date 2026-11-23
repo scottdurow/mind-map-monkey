@@ -48,6 +48,11 @@ interface Gesture {
   start: Map<number, Point>;
 }
 
+export interface TouchGesture {
+  blockDrag: boolean;
+  pinchGeneration: number;
+}
+
 /** How much of the map must stay inside the viewport, so a pan can never lose it. */
 const EDGE_MARGIN = 48;
 /** Inset a focused node is brought inside. */
@@ -116,7 +121,10 @@ export function useMapView(bounds: MapBounds, zoomMin: number, zoomMax: number) 
   const boundsRef = useRef(bounds);
   const fitRequested = useRef(true);
   const pointers = useRef(new Map<number, Point>());
+  const panPointers = useRef(new Set<number>());
   const gesture = useRef<Gesture | null>(null);
+  const touchGesture = useRef<TouchGesture>({ blockDrag: false, pinchGeneration: 0 });
+  const [pinching, setPinching] = useState(false);
   /** Whether the pointer gesture in progress (or the one that just ended) moved the map. */
   const moved = useRef(false);
   /** The eased move in progress: its frame request and where it is heading. */
@@ -317,23 +325,36 @@ export function useMapView(bounds: MapBounds, zoomMin: number, zoomMax: number) 
     gesture.current = { view: viewRef.current, start: new Map(pointers.current) };
   };
 
-  // Pans start on the background only; nodes, their toggles, the selected node's toolbar and its fly-out menu, and the
-  // association links (a click picks one) keep their own pointer handling.
+  // A single finger on a node belongs to the node; two fingers can pinch from nodes or the background.
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0 && event.button !== 1) return;
-    if (event.target instanceof Element && event.target.closest("button, a, input, textarea, select, [role='toolbar'], [role='menu'], [data-link-id]")) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const control = target?.closest("button, a, input, textarea, select, [role='toolbar'], [role='menu'], [data-link-id]");
+    const nodeTouch = event.pointerType === "touch" && !!target?.closest("button[data-node-id], [data-link-handle]");
+    if (control && !nodeTouch) return;
     stopGlide();
     pointers.current.set(event.pointerId, localPoint(event));
-    event.currentTarget.setPointerCapture(event.pointerId);
-    if (pointers.current.size === 1) moved.current = false;
+    if (!nodeTouch) {
+      panPointers.current.add(event.pointerId);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    if (pointers.current.size === 1) {
+      moved.current = false;
+      if (nodeTouch) return;
+    } else if (event.pointerType === "touch") {
+      touchGesture.current.blockDrag = true;
+      touchGesture.current.pinchGeneration++;
+      setPinching(true);
+    }
     rebase();
     setPanning(true);
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const active = gesture.current;
-    if (!active || !pointers.current.has(event.pointerId)) return;
+    if (!pointers.current.has(event.pointerId)) return;
     pointers.current.set(event.pointerId, localPoint(event));
+    const active = gesture.current;
+    if (!active) return;
     const points = [...active.start.keys()]
       .map((id) => ({ start: active.start.get(id), now: pointers.current.get(id) }))
       .filter((point): point is { start: Point; now: Point } => point.start !== undefined && point.now !== undefined);
@@ -359,13 +380,16 @@ export function useMapView(bounds: MapBounds, zoomMin: number, zoomMax: number) 
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!pointers.current.has(event.pointerId)) return;
     pointers.current.delete(event.pointerId);
+    panPointers.current.delete(event.pointerId);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    if (pointers.current.size) {
+    if (pointers.current.size < 2) setPinching(false);
+    if (pointers.current.size >= 2 || (pointers.current.size === 1 && panPointers.current.has([...pointers.current.keys()][0]))) {
       rebase();
     } else {
       gesture.current = null;
       setPanning(false);
     }
+    if (!pointers.current.size) touchGesture.current.blockDrag = false;
   };
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -410,6 +434,8 @@ export function useMapView(bounds: MapBounds, zoomMin: number, zoomMax: number) 
     /** The viewport's size in screen pixels (zero until first measured). */
     size,
     panning,
+    pinching,
+    touchGesture,
     transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
     zoomBy,
     fit,

@@ -2179,6 +2179,8 @@ export function HomePage() {
                     view={view.view}
                     viewportRef={view.viewportRef}
                     onPanForDrag={view.panForDrag}
+                    pinching={view.pinching}
+                    touchGesture={view.touchGesture}
                     viewKey={view.transform}
                     captionId="map-caption"
                     onSelect={selectNode}

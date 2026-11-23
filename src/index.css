@@ -98,10 +98,27 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+html {
+  touch-action: pan-x pan-y;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   margin: 0;
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  input:is(:not([type]), [type="text"], [type="search"], [type="email"], [type="url"], [type="tel"], [type="number"], [type="password"]),
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable="false"]) {
+    font-size: max(16px, 1rem);
+  }
+
+  [contenteditable]:not([contenteditable="false"]) code {
+    font-size: inherit;
+  }
 }
 
 @theme inline {
