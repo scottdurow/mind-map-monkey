@@ -11,7 +11,7 @@ const SKILL_URL = "https://github.com/scottdurow/mind-map-monkey/tree/main/skill
 const SKILL_ZIP_URL = "https://github.com/scottdurow/mind-map-monkey/raw/refs/heads/main/skills/mind-map-monkey.zip";
 const INSTALL_PROMPT = `Please install the Mind Map Monkey personal skill from ${SKILL_ZIP_URL}.
 
-Read SETUP.md in the ZIP and install the complete mind-map-monkey folder into my OneDrive Documents/Cowork/skills/ folder. Ask for my approval if needed. If you cannot access the private repository, let me know so I can provide the ZIP.`;
+Read SETUP.md in the ZIP and install the complete mind-map-monkey folder into my OneDrive Documents/Cowork/skills/ folder. Ask for my approval if needed. If you cannot access the repository, let me know so I can provide the ZIP.`;
 
 export function WelcomeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const copyPrompt = async () => {
@@ -36,7 +36,7 @@ export function WelcomeDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <div className="space-y-1">
             <h2 className="text-sm font-semibold">Install the Cowork skill</h2>
             <p className="text-sm text-muted-foreground">
-              Copy this request into a Cowork conversation. You need access to the private GitHub repository and a OneDrive for Business account.
+              Copy this request into a Cowork conversation. You need a OneDrive for Business account.
             </p>
           </div>
           <Label htmlFor="cowork-install-prompt">Request for Cowork</Label>
