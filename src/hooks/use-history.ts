@@ -47,6 +47,41 @@ export function useHistory<T>(initial: () => T) {
     setTimeline({ past: [], present: next, future: [], group: null });
   }, []);
 
+  /** Remove a provisional change from the timeline without discarding unrelated edits. */
+  const discard = useCallback((update: (value: T) => T, equal: (a: T, b: T) => boolean) => {
+    setTimeline((current) => {
+      const entries = [...current.past, current.present, ...current.future];
+      const presentIndex = current.past.length;
+      const past: T[] = [];
+      const future: T[] = [];
+      let present = update(current.present);
+      let previousChanged = false;
+      for (let i = 0; i < presentIndex; i++) {
+        const next = update(entries[i]);
+        const changed = next !== entries[i];
+        if (!past.length || !(previousChanged || changed) || !equal(past[past.length - 1], next)) {
+          past.push(next);
+          previousChanged = changed;
+        }
+      }
+      let presentChanged = present !== current.present;
+      if (past.length && (previousChanged || presentChanged) && equal(past[past.length - 1], present)) {
+        present = past.pop()!;
+        presentChanged = true;
+      }
+      let lastChanged = presentChanged;
+      for (let i = presentIndex + 1; i < entries.length; i++) {
+        const next = update(entries[i]);
+        const changed = next !== entries[i];
+        if (!(lastChanged || changed) || !equal(future.length ? future[future.length - 1] : present, next)) {
+          future.push(next);
+          lastChanged = changed;
+        }
+      }
+      return { past, present, future, group: null };
+    });
+  }, []);
+
   const undo = useCallback(() => {
     setTimeline((current) => {
       const previous = current.past[current.past.length - 1];
@@ -73,6 +108,7 @@ export function useHistory<T>(initial: () => T) {
     canRedo: timeline.future.length > 0,
     commit,
     reset,
+    discard,
     undo,
     redo,
     endGroup,

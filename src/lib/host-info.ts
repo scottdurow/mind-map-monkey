@@ -4,7 +4,7 @@ import { whenHostReady } from "@/lib/host-ready";
 import { STANDALONE } from "@/lib/standalone";
 
 /** The app's release version, shown in About. Bump it with each published release. */
-export const APP_VERSION = "1.1.1";
+export const APP_VERSION = "1.2.0";
 
 const HOST_TIMEOUT_MS = 4000;
 

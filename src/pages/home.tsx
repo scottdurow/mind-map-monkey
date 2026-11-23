@@ -41,6 +41,7 @@ import {
   Info,
   Shrink,
   Spline,
+  Trash2,
   Undo2,
   Unlink,
   X,
@@ -392,7 +393,7 @@ export function HomePage() {
   };
   const history = useHistory<MindMap>(loadMap);
   const map = history.present;
-  const { commit, reset: resetHistory, endGroup } = history;
+  const { commit, reset: resetHistory, discard: discardHistoryChange, endGroup } = history;
   const [selectedId, setSelectedId] = useState<string | null>(map.rootId);
   /** The association link picked on the canvas or in the inspector; the inspector edits it while one is. */
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
@@ -420,6 +421,7 @@ export function HomePage() {
   /** Below the `lg` breakpoint the inspector is a bottom sheet over the map rather than a sidebar beside it. */
   const wide = useMediaQuery("(min-width: 1024px)");
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [creatingNodeId, setCreatingNodeId] = useState<string | null>(null);
   const inspectorPinned = useAppStore((s) => s.inspectorPinned);
   const setInspectorPinned = useAppStore((s) => s.setInspectorPinned);
   /** The map takes the whole window: no header, status line or pinned details panel. */
@@ -431,7 +433,22 @@ export function HomePage() {
   const setPinned = (on: boolean) => {
     if (fullScreen) setFullScreenPinned(on);
     else setInspectorPinned(on);
-    setInspectorOpen(false);
+    setInspectorOpen(!on && creatingNodeId !== null);
+  };
+  const wasDocked = useRef(docked);
+  useLayoutEffect(() => {
+    if (wasDocked.current && !docked && creatingNodeId) {
+      pendingLabelFocus.current = true;
+      setInspectorOpen(true);
+    }
+    wasDocked.current = docked;
+  }, [docked, creatingNodeId]);
+  const changeInspectorOpen = (open: boolean) => {
+    setInspectorOpen(open);
+    if (!open) {
+      setCreatingNodeId(null);
+      pendingLabelFocus.current = false;
+    }
   };
   // Leaving the browser's full screen (Escape, or its own control) leaves the app's too.
   useEffect(() => {
@@ -885,12 +902,12 @@ export function HomePage() {
   }, [requestedKey, requestedId, requestedPath, openFromDrive, setSearchParams]);
 
   useEffect(() => {
-    if (pendingLabelFocus.current) {
+    if (pendingLabelFocus.current && labelRef.current) {
       pendingLabelFocus.current = false;
-      labelRef.current?.focus();
-      labelRef.current?.select();
+      labelRef.current.focus();
+      labelRef.current.select();
     }
-  }, [selectedId]);
+  }, [selectedId, inspectorOpen, docked]);
 
   const { viewportRef } = view;
   useEffect(() => {
@@ -901,6 +918,12 @@ export function HomePage() {
   }, [selectedId, viewportRef]);
 
   const selected = selectedId ? map.nodes[selectedId] : undefined;
+  useEffect(() => {
+    if (creatingNodeId && (selectedId !== creatingNodeId || selectedLinkId || !map.nodes[creatingNodeId])) {
+      setCreatingNodeId(null);
+      pendingLabelFocus.current = false;
+    }
+  }, [creatingNodeId, selectedId, selectedLinkId, map]);
   const parent = selected?.parentId ? map.nodes[selected.parentId] : undefined;
   const siblingIndex = parent && selected ? parent.children.indexOf(selected.id) : -1;
   const canMoveUp = siblingIndex > 0;
@@ -1091,6 +1114,8 @@ export function HomePage() {
   };
 
   const handleUndo = () => {
+    setCreatingNodeId(null);
+    pendingLabelFocus.current = false;
     // A description still being typed is a step of its own first, so undo takes it back rather than losing it.
     const pending = pendingDescription.current !== null;
     flushDescription();
@@ -1103,6 +1128,8 @@ export function HomePage() {
   };
 
   const handleRedo = () => {
+    setCreatingNodeId(null);
+    pendingLabelFocus.current = false;
     flushDescription();
     if (!history.canRedo) {
       announce("Nothing to redo.");
@@ -1292,6 +1319,8 @@ export function HomePage() {
     commit(result.map);
     pendingLabelFocus.current = true;
     selectNode(result.id);
+    setCreatingNodeId(result.id);
+    if (!docked) setInspectorOpen(true);
   };
 
   const handleAddSibling = () => {
@@ -1305,6 +1334,27 @@ export function HomePage() {
     commit(result.map);
     pendingLabelFocus.current = true;
     selectNode(result.id);
+    setCreatingNodeId(result.id);
+    if (!docked) setInspectorOpen(true);
+  };
+
+  const cancelNewNode = () => {
+    if (!selected?.parentId || selected.id !== creatingNodeId) return;
+    if (pendingDescription.current?.id === selected.id) discardDescription();
+    const id = selected.id;
+    discardHistoryChange((current) => removeNode(current, id), (a, b) => JSON.stringify(a) === JSON.stringify(b));
+    setCreatingNodeId(null);
+    pendingLabelFocus.current = false;
+    pendingNodeFocus.current = selected.parentId;
+    setSelectedId(selected.parentId);
+    if (!docked) setInspectorOpen(false);
+    announce("Cancelled new node.");
+  };
+
+  const finishNewNode = () => {
+    flushDescription();
+    setCreatingNodeId(null);
+    if (!docked) setInspectorOpen(false);
   };
 
   const handleDelete = async () => {
@@ -1531,7 +1581,7 @@ export function HomePage() {
   // anything is in progress or awaiting an answer: a file operation, a dialog, a drag, a newer version noticed
   // on OneDrive, a notice of something that failed, or a hold from an earlier automatic save. Every edit
   // restarts the wait (the code changes with the edit). An unlinked draft keeps itself locally and is left alone.
-  const autoSaveBlocked = busy || quiet || importOpen || shareTarget !== null || dragging || remote !== null || failure !== null || autoSaveHold !== null;
+  const autoSaveBlocked = busy || quiet || importOpen || shareTarget !== null || dragging || remote !== null || failure !== null || autoSaveHold !== null || creatingNodeId !== null;
   const autoSaveRef = useRef(performAutoSave);
   useLayoutEffect(() => {
     autoSaveRef.current = performAutoSave;
@@ -1961,7 +2011,7 @@ export function HomePage() {
       </aside>
     ) : wide ? (
       // Not modal, so the map stays live: picking another node shows its details here; a click elsewhere on the map closes it.
-      <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen} modal={false}>
+      <Sheet open={inspectorOpen} onOpenChange={changeInspectorOpen} modal={false}>
         <SheetContent
           data-map-inspector
           side="right"
@@ -1994,9 +2044,11 @@ export function HomePage() {
               >
                 <Pin aria-hidden="true" />
               </Button>
-              <Button variant="ghost" size="icon-sm" aria-label="Close details" onClick={() => setInspectorOpen(false)}>
-                <X aria-hidden="true" />
-              </Button>
+              {creatingNodeId === null && (
+                <Button variant="ghost" size="icon-sm" aria-label="Close details" onClick={() => changeInspectorOpen(false)}>
+                  <X aria-hidden="true" />
+                </Button>
+              )}
             </div>
           </div>
           <SheetDescription className="sr-only">Edit the selected node or link.</SheetDescription>
@@ -2004,18 +2056,25 @@ export function HomePage() {
         </SheetContent>
       </Sheet>
     ) : (
-      <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
+      <Sheet open={inspectorOpen} onOpenChange={changeInspectorOpen}>
         <SheetContent
           data-map-inspector
           side="bottom"
+          showCloseButton={creatingNodeId === null}
           className="max-h-[85dvh] gap-0 rounded-t-xl bg-card p-0 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] [padding-right:max(2.5rem,env(safe-area-inset-right))]"
           onOpenAutoFocus={(event) => {
-            // Don't raise the on-screen keyboard just because the sheet opened.
             event.preventDefault();
-            (event.currentTarget as HTMLElement | null)?.focus();
+            if (pendingLabelFocus.current && labelRef.current) {
+              pendingLabelFocus.current = false;
+              labelRef.current.focus();
+              labelRef.current.select();
+            } else {
+              // Existing nodes do not raise the keyboard just because the sheet opened.
+              (event.currentTarget as HTMLElement | null)?.focus();
+            }
           }}
         >
-          <SheetGrabber onClose={() => setInspectorOpen(false)} />
+          <SheetGrabber onClose={() => changeInspectorOpen(false)} />
           <SheetTitle className="sr-only">Inspector</SheetTitle>
           <SheetDescription className="sr-only">Edit the selected node or link.</SheetDescription>
           {body}
@@ -2351,7 +2410,29 @@ export function HomePage() {
                 </div>
               ) : selected ? (
                 <div className="space-y-5">
-                  <p className="text-xs text-muted-foreground">{parent ? `Under ${parent.label}` : "Root node"}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 text-xs text-muted-foreground">{parent ? `Under ${parent.label}` : "Root node"}</p>
+                    {parent && creatingNodeId !== selected.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0 text-destructive hover:text-destructive"
+                        aria-label="Delete node"
+                        title="Delete node"
+                        onClick={() => void handleDelete()}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    )}
+                  </div>
+                  {creatingNodeId === selected.id && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" onClick={finishNewNode}>Done</Button>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={cancelNewNode}>
+                        Cancel new node
+                      </Button>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label htmlFor="node-label">Label</Label>
                     <Input id="node-label" ref={labelRef} value={selected.label} spellCheck onBlur={endGroup} onChange={(e) => update({ label: e.target.value })} />

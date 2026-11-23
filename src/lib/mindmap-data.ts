@@ -498,7 +498,7 @@ const HELP_ENTRIES: HelpEntry[] = [
     parent: "build-toolbar",
     label: "Add child or sibling",
     text: [
-      "**Add child** puts a new node named *New idea* under the selected one; **Add sibling** puts it right after it. The new node is selected with its label ready to type over. A child takes its parent's color; a sibling takes the color and size of the node it was added beside.",
+      "**Add child** puts a new node named *New idea* under the selected one; **Add sibling** puts it right after it. The inspector opens with the label ready to type over. Choose **Done** to keep it or **Cancel new node** to remove it. Closing the inspector also keeps it. A child takes its parent's color; a sibling takes the color and size of the node it was added beside.",
     ],
   },
   {
@@ -521,7 +521,7 @@ const HELP_ENTRIES: HelpEntry[] = [
     id: "build-inspector",
     parent: "build",
     label: "Inspector",
-    text: ["The panel beside the canvas that edits the selected node or link. On a narrow screen it slides up from the bottom; tap outside it, swipe its handle down or press **Close** to put it away. **File → Export Mermaid** shows the whole map as code."],
+    text: ["The panel beside the canvas that edits the selected node or link. Use its delete icon to remove a node. On a narrow screen it slides up from the bottom; tap outside it, swipe its handle down or press **Close** to put it away. **File → Export Mermaid** shows the whole map as code."],
   },
   {
     id: "build-text",
