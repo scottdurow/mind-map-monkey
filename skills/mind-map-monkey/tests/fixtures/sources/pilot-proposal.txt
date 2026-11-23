@@ -1,0 +1,14 @@
+[Page 1]
+Contoso Field Notes pilot proposal
+Purpose: test the Field Notes app with two service teams before a wider rollout.
+
+[Page 2]
+Scope: the pilot covers the Leeds and Bristol service teams, 40 engineers in total.
+Success measure: engineers file visit notes within 2 hours of a visit in 80% of cases.
+
+[Page 3]
+Costs: licences cost GBP 12 per user per month. Training needs one half-day session per team.
+Risk: offline sync has not been tested on older Android devices.
+
+[Page 4]
+Timeline: pilot starts 11 January 2027 and runs for eight weeks. A go or no-go review follows in March 2027.

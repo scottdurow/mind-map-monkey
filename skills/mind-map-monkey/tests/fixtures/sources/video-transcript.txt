@@ -1,0 +1,7 @@
+Title: Intro to vector search (conference talk)
+[00:00:12] Today I'll explain what vector search is and when to use it.
+[00:01:05] An embedding turns text into a list of numbers that captures meaning.
+[00:03:40] Approximate nearest neighbour indexes such as HNSW trade a little recall for speed.
+[00:06:22] Hybrid search combines keyword scoring with vector similarity.
+[00:09:10] Evaluate with a labelled query set and measure recall at 10.
+[00:11:48] A common mistake is chunking documents too large, which dilutes the embedding.

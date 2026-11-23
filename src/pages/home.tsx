@@ -60,6 +60,7 @@ import { OneDriveBrowserDialog } from "@/components/onedrive-browser";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { AboutDialog } from "@/components/about-dialog";
+import { WelcomeDialog } from "@/components/welcome-dialog";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { TagEditor } from "@/components/tag-editor";
 import { Button } from "@/components/ui/button";
@@ -369,6 +370,26 @@ export function HomePage() {
   const setCurrentFile = useAppStore((s) => s.setCurrentFile);
   const { share, target: shareTarget, clear: clearShare } = useShareLink();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [welcomeOpen, setWelcomeOpen] = useState(() => {
+    if (searchParams.get("file") || searchParams.get("path")) return false;
+    try {
+      return localStorage.getItem("mind-map-monkey.welcome-seen") !== "yes";
+    } catch {
+      return true;
+    }
+  });
+  const [welcomeManual, setWelcomeManual] = useState(false);
+  const changeWelcomeOpen = (open: boolean) => {
+    setWelcomeOpen(open);
+    if (!open) {
+      setWelcomeManual(false);
+      try {
+        localStorage.setItem("mind-map-monkey.welcome-seen", "yes");
+      } catch {
+        // The welcome can be dismissed for this session when storage is unavailable.
+      }
+    }
+  };
   const history = useHistory<MindMap>(loadMap);
   const map = history.present;
   const { commit, reset: resetHistory, endGroup } = history;
@@ -1864,6 +1885,7 @@ export function HomePage() {
     { id: "help", label: "Open help map", Icon: BookOpen, onSelect: () => void handleOpenHelp() },
     "separator",
     { id: "settings", label: "Settings…", Icon: Settings, onSelect: () => setSettingsOpen(true) },
+    { id: "welcome", label: "Welcome and Cowork skill…", Icon: BookOpen, onSelect: () => { setWelcomeManual(true); changeWelcomeOpen(true); } },
     { id: "about", label: "About Mind Map Monkey", Icon: Info, onSelect: () => setAboutOpen(true) },
   ];
 
@@ -2558,6 +2580,7 @@ export function HomePage() {
       <ShareLinkDialog target={shareTarget} onClose={clearShare} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+      <WelcomeDialog open={welcomeOpen && (welcomeManual || !requestedKey)} onOpenChange={changeWelcomeOpen} />
 
       <LinkPicker
         map={map}

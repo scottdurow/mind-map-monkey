@@ -1,0 +1,4 @@
+URL: https://example.com/field-notes/rollout
+Field Notes rollout announcement
+The pilot runs across five regions, starting in January 2027.
+Offline sync is supported on Android 10 and later.

@@ -16,6 +16,15 @@ Keyboard shortcuts: `Ctrl/⌘+S` save, `Ctrl/⌘+F` find, `Ctrl/⌘+Shift+F` ful
 
 See [KNOWN-ISSUES.md](./KNOWN-ISSUES.md) for current limitations.
 
+## Cowork skill
+
+The [Mind Map Monkey skill](./skills/mind-map-monkey/SETUP.md) turns documents,
+web pages, video transcripts and meeting transcripts into editable maps saved
+to OneDrive for Business. [Download the skill ZIP](./skills/mind-map-monkey.zip),
+or open **File → Welcome and Cowork skill…** in the app to copy an installation
+request for Cowork. The GitHub repository is private, so you need access to it
+or a copy of the ZIP.
+
 ## Template
 
 The app was built from the App Builder template: React + TypeScript + Vite with **shadcn/ui (new-york, Radix)** + **Tailwind CSS v4** and a small, familiar set of libraries.

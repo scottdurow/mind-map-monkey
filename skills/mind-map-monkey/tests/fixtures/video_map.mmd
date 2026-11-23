@@ -1,0 +1,32 @@
+mindmap
+  vroot((Vector search essentials))
+  ::icon(lucide lucide-book)
+  :::color-brand size-large
+  %% Source: publisher's transcript of the talk "Intro to vector search".
+  %% Transcript only. Slides and on-screen demos were not seen, so visual content may be missing.
+    concepts(Core concepts)
+    :::color-sky size-medium
+      embedding[Embeddings]
+      :::color-sky size-small
+      %% Text becomes a list of numbers that captures meaning. 00:01:05.
+      ann[ANN indexes]
+      :::color-sky size-small
+      %% HNSW and similar indexes trade a little recall for speed. 00:03:40.
+    techniques(Techniques)
+    :::color-teal size-medium
+      hybrid(Hybrid search)
+      :::color-teal size-medium
+      %% Keyword scoring combined with vector similarity. 00:06:22.
+    evaluation(Evaluation)
+    :::color-amber size-medium
+      recall[Recall at 10]
+      :::color-amber size-small
+      %% Use a labelled query set. 00:09:10.
+    pitfalls(Pitfalls)
+    ::icon(lucide lucide-shield)
+    :::color-rose size-medium
+      chunking))Oversized chunks((
+      :::color-rose size-medium
+      %% @tags pitfall
+      %% @link embedding | dilutes
+      %% Chunks that are too large dilute the embedding. 00:11:48.
