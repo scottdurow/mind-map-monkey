@@ -1,0 +1,11 @@
+{
+  "appDisplayName": "Mind Map Monkey",
+  "buildEntryPoint": "index.html",
+  "buildPath": "dist",
+  "iconPath": "app-icon.png",
+  "version": "0.0",
+  "buildCommand": "npm run build",
+  "appSettings": {
+    "showHeader": false
+  }
+}

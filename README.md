@@ -2,11 +2,15 @@
 
 A mind-map editor that keeps your maps as plain [Mermaid](https://mermaid.js.org/syntax/mindmap.html) `.mmd` files in OneDrive. Build a map with the mouse, keyboard or touch, then open the same file in any Mermaid-aware tool.
 
+![Mind Map Monkey editor showing the built-in help map](docs/assets/mind-map-editor.png)
+
 - Add, rearrange and collapse branches, add descriptions with basic formatting, tags, importance and cross-links.
 - Open, save and auto-save to OneDrive, with a short save lock and a merge prompt when someone else changed the file.
 - Find nodes, undo and redo, full screen, and a pinned or floating details panel.
 - Export Mermaid code or a PNG; import a Mermaid file or pasted code.
 - Works on phones, with a compact toolbar and a bottom edit sheet.
+
+![Node details and editing controls in Mind Map Monkey](docs/assets/node-details.png)
 
 Keyboard shortcuts: `Ctrl/⌘+S` save, `Ctrl/⌘+F` find, `Ctrl/⌘+Shift+F` full screen, `Ctrl/⌘+Z` undo, `Ctrl/⌘+Y` redo. The built-in help map (**File → Open help map**) covers the rest.
 
@@ -84,7 +88,10 @@ the harness).
 
 The GitHub repository does not include `ms.config.json` or local app metadata.
 These contain identifiers and connection references specific to an individual
-app and environment. They are ignored by Git.
+app and environment. They are ignored by Git. The included
+[`ms.config.example.json`](./ms.config.example.json) documents the shared build,
+icon and app settings; it is not a complete configuration and should not be
+copied over a working `ms.config.json`.
 
 To create your own development app, install Node.js 24.11 or later, Git, and
 the [Copilot Managed Runtime CLI](https://www.npmjs.com/package/@microsoft/cmr-cli),
@@ -103,8 +110,10 @@ when prompted. Initialization creates a new, local `ms.config.json`; adding the
 data source creates the app's own connection reference and regenerates the
 typed client in `generated/`. The `--repo none` option keeps the GitHub remote
 unchanged and uses the CLI's artifact-based deployment flow. Deploying is a
-separate step. Review regenerated files and other changes for identifiers or
-credentials before committing them.
+separate step. Compare the generated config with `ms.config.example.json`
+and apply any shared settings you need without replacing the generated IDs or
+connection references. Review regenerated files and other changes for
+identifiers or credentials before committing them.
 
 The existing CMR checkout has a separate Git history. Do not merge it into this
 repository: its history contains app-specific identifiers. To publish changes
